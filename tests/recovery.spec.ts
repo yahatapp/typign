@@ -1,0 +1,31 @@
+import {test,expect} from '@playwright/test';
+test('reload recovery preserves completed phrases and selected plan; saved notes can be deleted',async({page})=>{
+  await page.goto('/');await expect(page.getByText('保存済み',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'開始',exact:true}).click();
+  const value=await page.getByTestId('input-guide').textContent();
+  await page.getByLabel('入力',{exact:true}).pressSequentially(value!);await page.getByLabel('入力',{exact:true}).press('Enter');
+  await expect(page.getByText('保存済み',{exact:true})).toBeVisible();
+  await page.reload();await page.getByRole('button',{name:'保存した練習を再開'}).click();
+  await expect(page.getByLabel('入力',{exact:true})).toBeEditable();
+  await expect(page.locator('.practice-meta')).toContainText('1');
+  await page.getByRole('button',{name:'ブロックを終了'}).click();
+  await page.getByLabel('入力',{exact:true}).pressSequentially('test');await page.getByRole('button',{name:'ブロックを終了'}).click();
+  await page.getByLabel('感想',{exact:true}).fill('削除する感想');await page.getByRole('button',{name:'感想を保存'}).click();
+  await page.getByRole('link',{name:'記録'}).click();
+  const record=page.locator('.record').first();await record.locator(':scope > summary').click();
+  await record.getByText('感想の確認・編集',{exact:true}).click();
+  await expect(record.getByLabel('保存した感想')).toHaveValue('削除する感想');
+  await record.getByRole('button',{name:'感想を削除'}).click();await expect(record.getByLabel('保存した感想')).toHaveValue('');
+  await expect(page.getByText('保存済み',{exact:true})).toBeVisible();await page.reload();
+  const restored=page.locator('.record').first();await restored.locator(':scope > summary').click();await restored.getByText('感想の確認・編集',{exact:true}).click();
+  await expect(restored.getByLabel('保存した感想')).toHaveValue('');
+});
+test('backup of an in-progress execution has consistent references and no personal request leaves browser',async({page})=>{
+  const transmitted:string[]=[];
+  page.on('request',request=>{if(request.method()!=='GET')transmitted.push(`${request.method()} ${request.url()}`);});
+  await page.goto('/');await expect(page.getByText('保存済み',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'開始',exact:true}).click();await expect(page.getByText('保存済み',{exact:true})).toBeVisible();
+  await page.reload();await page.getByRole('link',{name:'設定'}).click();
+  const download=page.waitForEvent('download');await page.getByRole('button',{name:'JSONを書き出す'}).click();expect(await(await download).path()).toBeTruthy();
+  expect(transmitted).toEqual([]);
+});
