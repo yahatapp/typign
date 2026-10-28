@@ -118,7 +118,8 @@ pnpm start
 4. [学習設計・計測の調査](docs/research/learning-and-measurement.md)
 5. [ホスティング・データベースの調査](docs/research/hosting-and-data.md)
 6. [LLM連携の調査](docs/research/llm-options.md)
+7. [MVP後の機能拡張計画](docs/post-mvp-roadmap.md) — 見送った機能、コア体験の改善、追加機能、非機能の拡充と実装順
 
 外部仕様・無料枠の確認日は各資料に記載。学習効果、利用資格、アカウントごとの無料枠など、未検証の事項は推奨設計と区別しています。
 
-最終更新日: 2026-10-22
+最終更新日: 2026-10-24
