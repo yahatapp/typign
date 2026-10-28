@@ -23,8 +23,15 @@ mock_provider "awscc" {
 }
 
 variables {
-  aws_account_id = "123456789012"
-  artifact_path  = "tests/fixtures/artifact.zip"
+  # Keep assertions independent of local deployment settings in terraform.tfvars.
+  aws_account_id          = "123456789012"
+  aws_region              = "ap-northeast-1"
+  function_name           = "typign-dev"
+  artifact_path           = "tests/fixtures/artifact.zip"
+  max_environments        = 2
+  rate_limit              = 100
+  log_retention_days      = 14
+  force_destroy_artifacts = false
 }
 
 run "deployment_contract" {
