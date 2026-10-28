@@ -16,6 +16,21 @@ Chrome内蔵LLMの接続処理を実装しています。確認した端末のCh
 
 開発する人向けの手順です。初回はこの節と「検証する」を確認してください。配信・データ・資料の節は必要なときに参照できます。
 
+### Nixとdirenvで開発ツールを用意する
+
+- Nixとdirenvを用意し、利用するシェルで[direnvのhook](https://direnv.net/docs/hook.html)を有効にします。
+- リポジトリのルートで `direnv allow` を実行すると、`flake.lock` で固定したTerraform、AWS CLI v2、zip、unzip、curlが利用できます。macOSのArm64とLinuxのArm64／x86_64に対応しています。
+- Node.jsとpnpmは、グローバルの管理ツールで用意したものをPATHから使います。Node.jsの版は `.node-version`、pnpmの版は `package.json` の `packageManager` に従ってください。依存関係やPlaywrightのブラウザもpnpmで管理します。
+- direnvを使わない場合は `nix develop` で同じ環境に入れます。Terraformのライセンス許可は、このflake内のTerraformに限定しています。
+
+```sh
+direnv allow
+pnpm install --frozen-lockfile
+pnpm exec playwright install chromium
+```
+
+### アプリを起動する
+
 1. Node.js 24とpnpm 11.11.0を用意する。`.node-version` は24.22.0を指定しています。
 2. `pnpm install --frozen-lockfile` で依存関係を入れる。
 3. `pnpm dev` を実行し、[開発画面](http://127.0.0.1:5173/)を開く。
