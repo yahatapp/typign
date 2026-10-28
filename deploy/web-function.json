@@ -1,0 +1,4 @@
+{
+  "runtimeConfig": { "runtime": "nodejs24.x" },
+  "description": "Typign MVP: upload dist with production dependencies. Configure endpoint and revisions in AWS before publishing."
+}

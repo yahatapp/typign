@@ -1,0 +1,51 @@
+# Dependencies, development caches, and generated output.
+node_modules/
+.pnpm-store/
+.direnv/
+dist/
+.vite/
+.cache/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+artifacts/
+
+# Local environment and registry credentials. Keep shareable examples.
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+*.local
+.npmrc
+.aws/
+.ssh/
+
+# Private keys and credential stores. Use *.example for dummy fixtures.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# Personal training data exported by the app.
+typign-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*.json
+
+# Logs, OS metadata, and editor temporary files.
+*.log
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~

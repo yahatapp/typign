@@ -1,0 +1,24 @@
+# Terraform state, plans, and actual variable values may contain secrets.
+# Keep .terraform.lock.hcl and *.tfvars.example under version control.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+*.tfvars
+*.tfvars.json
+*.tfbackend
+
+# Local CLI credentials and configuration overrides.
+.terraformrc
+terraform.rc
+*.tfrc
+*.tfrc.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform crash reports.
+crash.log
+crash.*.log
