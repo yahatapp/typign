@@ -5,3 +5,11 @@ playwright-report/
 test-results/
 *.local
 artifacts/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log

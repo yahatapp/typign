@@ -76,6 +76,8 @@ pnpm start
 - `deploy/web-function.json` はruntime設定の抜粋です。AWSリソースを作成するIaCテンプレートではありません。endpoint、revision、アクセス制御、ログ、費用の設定は公開時に確認してください。
 - ハッシュ付き静的ファイルは長期キャッシュ、HTML・Flightは `no-store` にしています。AWSへのデプロイは実行していません。
 
+Terraformの構成を [deploy/terraform](deploy/terraform/README.md) に用意しています。AWS Cloud Control ProviderでWeb Function・リビジョン・HTTPSエンドポイントを管理し、通常のAWS ProviderでS3・実行ロール・ログを作成します。配信用ZIPの生成、plan、apply、動作確認、更新・削除の手順は同資料を参照してください。
+
 ## 計測とデータ保存
 
 - ローマ字の許容経路は独自の版付きグラフです。`shi/si`、促音、撥音、拗音、小書き文字と混在文を扱います。対応範囲は `src/core/romanization.ts` に記載しています。
