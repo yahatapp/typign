@@ -33,7 +33,7 @@ pnpm --dir app exec playwright install chromium
 
 ### アプリを起動する
 
-1. Node.js 24とpnpm 11.11.0を用意する。`app/.node-version` は24.22.0を指定しています。
+1. Node.js 24とpnpm 11.11.0を用意する。`app/.node-version` は24.21.0を指定しています。
 2. `pnpm --dir app install --frozen-lockfile` で依存関係を入れる。
 3. `pnpm --dir app dev` を実行し、[開発画面](http://127.0.0.1:5173/)を開く。
 4. 「診断を開始」か練習の種類を選び、IME OFFで入力する。Enterで確定できます。

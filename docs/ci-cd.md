@@ -58,7 +58,7 @@ plan バイナリには sensitive な値も含まれるため、共通 secret `T
 
 Terraform 本体はローカル用の `default` shell にだけ含める。`nix/terraform.nix` が `.terraform-version` を読み、公式の1.17.1バイナリをOS・CPUごとのSHA256で検証して導入する。CI用の shell には含めず、`hashicorp/setup-terraform` が同じ `.terraform-version` を読んで導入する。Terraformのライセンス許可は、このパッケージに限定している。
 
-Node.js は `app/.node-version` の 24.22.0。公式バイナリを OS・CPU ごとの SHA256 で固定し、ソースからのコンパイルを避けている。pnpm は `app/package.json` と flake の両方で 11.11.0 を指定し、CI が一致を検査する。Playwright の Chromium は pnpm lockfile に従い、Linux で必要なシステムライブラリは `playwright install --with-deps` で用意する。
+Node.js は `app/.node-version` の 24.21.0。固定済み nixpkgs の Node を使い、指定した版との一致を Nix の評価時に検査する。Linux では公式 ELF の独自加工によるクラッシュを避けるため、nixpkgs のビルドとバイナリキャッシュを使う。pnpm は `app/package.json` と flake の両方で 11.11.0 を指定し、CI が一致を検査する。Playwright の Chromium は pnpm lockfile に従い、Linux で必要なシステムライブラリは `playwright install --with-deps` で用意する。
 
 ```sh
 nix develop .#ci-web
@@ -243,7 +243,16 @@ git diff -- .github/workflows
 
 `--no-narrow` は SHA をタグへ書き戻さずに lockfile を生成するために必要。lockfile 内の SHA とタグの両エントリーは公式ツールが生成する。手で編集しない。`nix/actions-lock.nix` はこの動作を確認した v0.4.0 の公式バイナリをハッシュ付きで固定している。
 
-Dependabot は Actions・npm・Terraform Provider の更新を週1回確認する。SHA 固定と lockfile の両方を更新できていることを PR で確認する。nixpkgs は `nix flake update nixpkgs` で更新する。Node.js の更新時は `app/.node-version` と `nix/nodejs.nix` の各 OS・CPU のハッシュを、pnpm の更新時は `packageManager` と flake の版・ハッシュを合わせる。
+Dependabot は Actions・npm・Terraform Provider の更新を週1回確認する。SHA 固定と lockfile の両方を更新できていることを PR で確認する。nixpkgs は `nix flake update nixpkgs` で更新する。Node.js の更新時は固定する nixpkgs と `app/.node-version` を、pnpm の更新時は `packageManager` と flake の版・ハッシュを合わせる。
+
+Provider の更新時は、ローカルと CI で使う OS・CPU のチェックサムを公式レジストリから追加する。CI の `init -lockfile=readonly` は維持し、lockfile の検証を省略しない。
+
+```sh
+terraform -chdir=infra providers lock \
+  -platform=darwin_arm64 -platform=linux_amd64 -platform=linux_arm64
+terraform -chdir=infra/bootstrap providers lock \
+  -platform=darwin_arm64 -platform=linux_amd64 -platform=linux_arm64
+```
 
 ## 監査の判定と確認済みの範囲
 
