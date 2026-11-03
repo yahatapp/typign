@@ -1,0 +1,253 @@
+name: CI
+
+on:
+  pull_request:
+  merge_group:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CI: 'true'
+  TF_IN_AUTOMATION: 'true'
+
+jobs:
+  web:
+    name: web / ${{ matrix.check }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [lint, 'format:check', typecheck, test, audit]
+    defaults:
+      run:
+        shell: nix develop .#ci-web --no-update-lock-file --command bash -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-web-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-web-
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Check runtime versions and locate pnpm store
+        id: pnpm
+        run: |
+          test "$(node --version)" = "v$(cat app/.node-version)"
+          test "pnpm@$(pnpm --dir app --version)" = "$(node -p 'require("./app/package.json").packageManager')"
+          echo "store=$(pnpm --dir app store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/pnpm-lock.yaml', 'flake.lock', 'app/.node-version', 'app/package.json') }}
+      - run: pnpm --dir app install --frozen-lockfile
+      - run: pnpm --dir app run "${{ matrix.check }}"
+
+  build:
+    name: web / build and package (ARM64)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: nix develop .#ci-web --no-update-lock-file --command bash -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-web-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-web-
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Check runtime versions and locate pnpm store
+        id: pnpm
+        run: |
+          test "$(node --version)" = "v$(cat app/.node-version)"
+          test "pnpm@$(pnpm --dir app --version)" = "$(node -p 'require("./app/package.json").packageManager')"
+          echo "store=$(pnpm --dir app store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/pnpm-lock.yaml', 'flake.lock', 'app/.node-version', 'app/package.json') }}
+      - run: pnpm --dir app install --frozen-lockfile
+      - run: pnpm --dir app build
+      - run: pnpm --dir app test:package
+      - run: pnpm --dir app package:aws:built
+      - run: tar -czf app/artifacts/dist.tar.gz -C app dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-${{ github.sha }}
+          path: app/artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  e2e:
+    name: web / E2E (ARM64)
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: nix develop .#ci-web --no-update-lock-file --command bash -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-web-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-web-
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Check runtime versions and locate pnpm store
+        id: pnpm
+        run: |
+          test "$(node --version)" = "v$(cat app/.node-version)"
+          test "pnpm@$(pnpm --dir app --version)" = "$(node -p 'require("./app/package.json").packageManager')"
+          echo "store=$(pnpm --dir app store path)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.pnpm.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('app/pnpm-lock.yaml', 'flake.lock', 'app/.node-version', 'app/package.json') }}
+      - run: pnpm --dir app install --frozen-lockfile
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-${{ github.sha }}
+          path: app/artifacts
+      - run: tar -xzf app/artifacts/dist.tar.gz -C app
+      - run: pnpm --dir app exec playwright install --with-deps chromium
+      - run: pnpm --dir app test:e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: playwright-${{ github.sha }}
+          path: |
+            app/test-results/
+            app/playwright-report/
+          retention-days: 7
+
+  terraform:
+    name: infra / Terraform (${{ matrix.root }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        root: [infra, infra/bootstrap]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read Terraform version
+        id: terraform
+        run: echo "version=$(cat infra/.terraform-version)" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.terraform.outputs.version }}
+          terraform_wrapper: false
+      - run: terraform -chdir=${{ matrix.root }} fmt -check -recursive
+      - run: terraform -chdir=${{ matrix.root }} init -backend=false -input=false -lockfile=readonly
+      - run: terraform -chdir=${{ matrix.root }} validate
+      - run: terraform -chdir=${{ matrix.root }} test
+
+  infra:
+    name: infra / lint and audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: nix develop .#ci-infra --no-update-lock-file --command bash -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-infra-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-infra-
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - run: |
+          sh infra/tests/scripts/deploy.test.sh
+          sh infra/tests/scripts/check-approval.test.sh
+      - run: tflint --chdir=infra --recursive --config="$PWD/infra/.tflint.hcl"
+      - run: trivy config --exit-code 1 --severity HIGH,CRITICAL --skip-files '**/*.tfplan' --skip-files '**/*.tfstate*' infra
+
+  secrets:
+    name: security / secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: nix develop .#ci-security --no-update-lock-file --command bash -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-security-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-security-
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - run: gitleaks git --redact --log-opts=--all .
+
+  workflows:
+    name: CI configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: nix develop .#ci-workflows --no-update-lock-file --command bash -euo pipefail {0}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-workflows-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-workflows-
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - run: actionlint
+      - run: shellcheck --shell=sh app/scripts/*.sh app/scripts/lib/*.sh app/tests/scripts/*.sh infra/scripts/*.sh infra/tests/scripts/*.sh infra/tests/scripts/fixtures/*.sh
+      - run: shfmt -ln posix -i 2 -d app/scripts app/tests/scripts infra/scripts infra/tests/scripts
+      - run: nixfmt --check flake.nix nix/*.nix
+      - run: statix check .
+      - run: gh-actions-lock --verify --no-narrow
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  required:
+    name: CI required
+    if: always()
+    needs: [web, build, e2e, terraform, infra, secrets, workflows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every check to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: jq -e 'all(.[]; .result == "success")' <<< "$RESULTS"

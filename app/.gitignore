@@ -1,0 +1,10 @@
+# App dependencies, build output and test artifacts.
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+artifacts/

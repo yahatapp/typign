@@ -136,4 +136,4 @@ V1を確認できる環境が得られない場合には、A4の比較検証を�
 
 機能の出発点は[プロジェクト企画](product-concept.md)、完了条件と境界は[MVP仕様](mvp-scope.md)、データとLLMの分担は[技術設計](architecture.md)による。AI方式の候補は[LLM連携の調査](research/llm-options.md)を引き継ぐ。外部仕様の参照確認日は2026-10-24。実機・AWS・学習効果の確認状況は[README](../README.md)を更新して管理する。
 
-比較と後日の候補抽出は[evidence.ts](../src/coach/evidence.ts)、教材タグは[corpus.ts](../src/core/corpus.ts)、保存schemaと全件読み込みは[repository.ts](../src/data/repository.ts)、分析・計画の画面は[App.tsx](../src/ui/App.tsx)にある。拡張時には現行のテストとデータ契約を確認し、既存記録の意味を保つ。
+比較と後日の候補抽出は[evidence.ts](../app/src/coach/evidence.ts)、教材タグは[corpus.ts](../app/src/core/corpus.ts)、保存schemaと全件読み込みは[repository.ts](../app/src/data/repository.ts)、分析・計画の画面は[App.tsx](../app/src/ui/App.tsx)にある。拡張時には現行のテストとデータ契約を確認し、既存記録の意味を保つ。

@@ -14,31 +14,33 @@ Chrome内蔵LLMの接続処理を実装しています。確認した端末のCh
 
 ## ローカルで起動する
 
+アプリは `app/`、AWS構成とデプロイ処理は `infra/` に分けています。以下のコマンドはリポジトリのルートから実行します。`cd app` で移動した場合は、`pnpm --dir app` を `pnpm` に読み替えてください。
+
 開発する人向けの手順です。初回はこの節と「検証する」を確認してください。配信・データ・資料の節は必要なときに参照できます。
 
 ### Nixとdirenvで開発ツールを用意する
 
 - Nixとdirenvを用意し、利用するシェルで[direnvのhook](https://direnv.net/docs/hook.html)を有効にします。
-- リポジトリのルートで `direnv allow` を実行すると、`flake.lock` で固定したTerraform、AWS CLI v2、zip、unzip、curlが利用できます。macOSのArm64とLinuxのArm64／x86_64に対応しています。
-- Node.jsとpnpmは、グローバルの管理ツールで用意したものをPATHから使います。Node.jsの版は `.node-version`、pnpmの版は `package.json` の `packageManager` に従ってください。依存関係やPlaywrightのブラウザもpnpmで管理します。
-- direnvを使わない場合は `nix develop` で同じ環境に入れます。Terraformのライセンス許可は、このflake内のTerraformに限定しています。
+- リポジトリのルートで `direnv allow` を実行すると、Node.js、pnpm、AWS CLI v2、検査ツール、zip、unzip、curlが利用できます。macOSのArm64とLinuxのArm64／x86_64に対応しています。
+- Node.jsの版は `app/.node-version`、pnpmの版は `app/package.json` の `packageManager` とflakeで固定しています。その他のツールは `flake.lock` で固定します。依存関係やPlaywrightのブラウザはpnpmで管理します。
+- direnvを使わない場合は `nix develop` で同じ環境に入れます。ローカルでは `infra/.terraform-version` に合わせたTerraform 1.17.1も利用できます。CIではflakeに含めず、`setup-terraform`で同じ版を導入します。CI用の軽量shellと実行方法は [CI/CDの手順](docs/ci-cd.md)を参照してください。
 
 ```sh
 direnv allow
-pnpm install --frozen-lockfile
-pnpm exec playwright install chromium
+pnpm --dir app install --frozen-lockfile
+pnpm --dir app exec playwright install chromium
 ```
 
 ### アプリを起動する
 
-1. Node.js 24とpnpm 11.11.0を用意する。`.node-version` は24.22.0を指定しています。
-2. `pnpm install --frozen-lockfile` で依存関係を入れる。
-3. `pnpm dev` を実行し、[開発画面](http://127.0.0.1:5173/)を開く。
+1. Node.js 24とpnpm 11.11.0を用意する。`app/.node-version` は24.21.0を指定しています。
+2. `pnpm --dir app install --frozen-lockfile` で依存関係を入れる。
+3. `pnpm --dir app dev` を実行し、[開発画面](http://127.0.0.1:5173/)を開く。
 4. 「診断を開始」か練習の種類を選び、IME OFFで入力する。Enterで確定できます。
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm dev
+pnpm --dir app install --frozen-lockfile
+pnpm --dir app dev
 ```
 
 - 対象はPC Chrome。日本語の読みはローマ字、英字・記号の区間は表示どおりに入力します。
@@ -50,25 +52,29 @@ pnpm dev
 
 | コマンド | 確認するもの |
 | --- | --- |
-| `pnpm typecheck` | TypeScriptの型 |
-| `pnpm test` | ローマ字経路、編集履歴、集計、計画検証、保存・復元・保持期限 |
-| `pnpm build` | RSC・SSR・ブラウザの本番成果物と起動パッケージ |
-| `pnpm check` | 型検査、自動テスト、本番ビルド |
-| `pnpm test:e2e` | 本番ビルドで診断から振り返りまでの操作と失敗時の動作 |
-| `pnpm test:package` | 一時フォルダへ本番用依存関係だけを入れ、配信用成果物を単独で起動 |
-| `pnpm package:aws` | 本番依存関係を含むAWS配信用ZIPを `artifacts/typign.zip` に生成 |
+| `pnpm --dir app lint` | Biomeによるコード検査 |
+| `pnpm --dir app format:check` | コードの整形状態（反映は `pnpm --dir app format`） |
+| `pnpm --dir app typecheck` | TypeScriptの型 |
+| `pnpm --dir app test` | ローマ字経路、編集履歴、集計、計画検証、保存・復元・保持期限 |
+| `pnpm --dir app build` | RSC・SSR・ブラウザの本番成果物と起動パッケージ |
+| `pnpm --dir app check` | lint、整形検査、型検査、自動テスト、本番ビルド |
+| `pnpm --dir app test:e2e` | 本番ビルドで診断から振り返りまでの操作と失敗時の動作 |
+| `pnpm --dir app test:package` | 一時フォルダへ本番用依存関係だけを入れ、配信用成果物を単独で起動 |
+| `sh infra/tests/scripts/deploy.test.sh` | AWS接続なしでデプロイスクリプトの成功・失敗時の動作を検査 |
+| `pnpm --dir app package:aws` | 本番依存関係を含むAWS配信用ZIPを `app/artifacts/typign.zip` に生成 |
+| `pnpm --dir app run audit` | 開発依存を含む脆弱性検査（high以上で失敗） |
 
 ブラウザテストの前に本番成果物とテスト用Chromiumを用意します。
 
 ```sh
-pnpm build
-pnpm exec playwright install chromium
-pnpm test:e2e
+pnpm --dir app build
+pnpm --dir app exec playwright install chromium
+pnpm --dir app test:e2e
 ```
 
 既存のテスト用Chromeを使う場合は、`CHROMIUM_EXECUTABLE_PATH` に実行ファイルの絶対パスを指定できます。テストは専用のブラウザコンテキストを使い、ローカルの3100番ポートで実行します。
 
-実モデルを確認するには、`pnpm dev` の起動後に [コーチ検証](http://127.0.0.1:5173/verify/coach)を開きます。「実モデルで20例を検証」から日本語の提案・時間と重点の変更・振り返りを実行し、結果をJSONへ書き出せます。この画面は開発時だけ利用できます。合格表示は構造検査の結果で、日本語の自然さと根拠との一致は人による確認も必要です。
+実モデルを確認するには、`pnpm --dir app dev` の起動後に [コーチ検証](http://127.0.0.1:5173/verify/coach)を開きます。「実モデルで20例を検証」から日本語の提案・時間と重点の変更・振り返りを実行し、結果をJSONへ書き出せます。この画面は開発時だけ利用できます。合格表示は構造検査の結果で、日本語の自然さと根拠との一致は人による確認も必要です。
 
 ### 確認済みの範囲
 
@@ -77,25 +83,57 @@ pnpm test:e2e
 - コーチの自動テストにはモデルAPIのモックを使っています。実際のモデル取得・日本語品質の合格を示すものではありません。
 - Windows/macOSの実キーボードによるJIS/US・OS IMEの動作、AWS上の起動・配信・費用は未検証です。
 
+## ソースと運用スクリプト
+
+```text
+app/                 アプリ本体・依存関係・ビルド設定
+  src/
+  scripts/
+  tests/
+infra/               AWS構成とデプロイ
+  *.tf
+  bootstrap/
+  scripts/
+  tests/
+.github/             CI/CDとDependabot
+nix/                 共通ツールのパッケージ定義
+docs/                設計・運用資料
+flake.nix            ローカルとCIのツール構成
+```
+
+| 配置 | 役割 |
+| --- | --- |
+| `app/src/server/index.ts` | 本番のHTTPサーバー。ビルド時に `app/dist/index.js` へコンパイル |
+| `app/scripts/build.sh` | Viteとサーバーのビルド、配布用メタデータの配置 |
+| `app/scripts/package-aws.sh` | 本番依存を含むAWS用ZIPの作成 |
+| `infra/scripts/deploy.sh` | Terraform Cloudのstateを使ったAWSへの配置とHTTP確認 |
+| `app/scripts/lib/package.sh` | ZIP作成と起動テストが共通で使う配布物の準備 |
+| `app/tests/` | アプリのE2Eと配布物の起動テスト |
+| `infra/tests/` | Terraformのモックテストとデプロイスクリプトの検証 |
+
+運用スクリプトとそのテストはPOSIX shで記述し、ShellCheckとshfmtで検査します。JSONの操作にはjqを使います。これらのツールはflakeで固定しています。
+
 ## 本番成果物とAWS配信用の構成
 
 ```sh
-pnpm build
-pnpm start
+pnpm --dir app build
+pnpm --dir app start
 ```
 
-- `pnpm start` は [本番画面](http://127.0.0.1:3000/)を起動します。ローカルのポートは `PORT`、ホストは `HOST` で変更できます。
-- `dist/` に `index.js`、RSC・SSR・ブラウザ成果物、lockfile、NOTICEを生成します。
-- 配信用の `dist/` 内で `pnpm install --prod --frozen-lockfile` を実行すると、本番用依存関係を用意できます。AWSへはNode.js 24 / Arm64向けの依存関係を含めて配置してください。
+- `pnpm --dir app start` は [本番画面](http://127.0.0.1:3000/)を起動します。ローカルのポートは `PORT`、ホストは `HOST` で変更できます。
+- `app/dist/` に `index.js`、RSC・SSR・ブラウザ成果物、lockfile、NOTICEを生成します。
+- 配信用の `app/dist/` 内で `pnpm install --prod --frozen-lockfile` を実行すると、本番用依存関係を用意できます。AWSへはNode.js 24 / Arm64向けの依存関係を含めて配置してください。
 - Lambda Web Functionsでは `AWS_LAMBDA_HTTP_ENDPOINT` のhost:portを読みます。サーバーはRSCを読み込む前に `NODE_ENV=production` を設定し、サーバーとブラウザの形式を揃えます。
-- `deploy/web-function.json` はruntime設定の抜粋です。AWSリソースを作成するIaCテンプレートではありません。endpoint、revision、アクセス制御、ログ、費用の設定は公開時に確認してください。
+- `infra/web-function.json` はruntime設定の抜粋です。AWSリソースを作成するIaCテンプレートではありません。endpoint、revision、アクセス制御、ログ、費用の設定は公開時に確認してください。
 - ハッシュ付き静的ファイルは長期キャッシュ、HTML・Flightは `no-store` にしています。AWSへのデプロイは実行していません。
 
-Terraformの構成を [deploy/terraform](deploy/terraform/README.md) に用意しています。AWS Cloud Control ProviderでWeb Function・リビジョン・HTTPSエンドポイントを管理し、通常のAWS ProviderでS3・実行ロール・ログを作成します。配信用ZIPの生成、plan、apply、動作確認、更新・削除の手順は同資料を参照してください。
+Terraformの構成を [infra](infra/README.md) に用意しています。AWS Cloud Control ProviderでWeb Function・リビジョン・HTTPSエンドポイントを管理し、通常のAWS ProviderでS3・実行ロール・ログを作成します。配信用ZIPの生成、plan、apply、動作確認、更新・削除の手順は同資料を参照してください。
+
+GitHub Actionsの [CI/CD設定](docs/ci-cd.md)では、Web・インフラ・Secretの検査後に、保存したplanをレビューし、GitHubの承認ボタンでApplyを進めて検査済みZIPをAWSへ配置します。CodeBuildのサービスロールによるAWS認証、初回のロール作成とTerraform Cloudへのstate移行、GitHub Environmentの設定、`actions.lock`とSHA固定の更新手順を記載しています。AWSとGitHub側の初期設定は別途必要です。
 
 ## 計測とデータ保存
 
-- ローマ字の許容経路は独自の版付きグラフです。`shi/si`、促音、撥音、拗音、小書き文字と混在文を扱います。対応範囲は `src/core/romanization.ts` に記載しています。
+- ローマ字の許容経路は独自の版付きグラフです。`shi/si`、促音、撥音、拗音、小書き文字と混在文を扱います。対応範囲は `app/src/core/romanization.ts` に記載しています。
 - 誤入力を弾かず、削除・選択置換・カーソル移動を記録します。最終正解に直した場合も、観測できた誤り候補と修正操作を残します。
 - 最終正確性、修正操作/100入力文字、正しい文字/分、候補件数、カバー率を表示します。曖昧な編集は原因分類を保留します。
 - 正確性の速度記録は、カバー率100%・修正なし・最終正解の試行に限定します。自動の習得認定は行いません。
@@ -113,7 +151,7 @@ Terraformの構成を [deploy/terraform](deploy/terraform/README.md) に用意�
 | 「未保存」と出る | 画面を閉じず、ストレージの利用条件を確認して「保存を再試行」を選ぶ |
 | 速度が「—」になる | IME、貼り付け、リピート、中断、観測不足などの除外理由を確認する |
 | 未見の教材を使い切った | 次回の確認欄に表示される。評価用教材の追加まで、未見確認は行えない |
-| Node起動時に版の取得で失敗する | `node --version` と `.node-version` を確認し、既存のNode.js 24をPATHに指定する |
+| Node起動時に版の取得で失敗する | `node --version` と `app/.node-version` を確認し、既存のNode.js 24をPATHに指定する |
 
 不具合の確認には、再現手順、ブラウザ・配列、表示された除外理由を使います。個人の生イベントを公開する必要はありません。
 
