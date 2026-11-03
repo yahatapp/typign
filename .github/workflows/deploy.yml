@@ -1,0 +1,165 @@
+name: Deploy AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize releases, including the approval wait. Terraform Cloud also locks state.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  plan:
+    name: Plan production
+    outputs:
+      plan_sha256: ${{ steps.plan.outputs.plan_sha256 }}
+      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+    if: github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: codebuild-typign-plan-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 45
+    environment:
+      name: production-plan
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TF_IN_AUTOMATION: 'true'
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_VAR_aws_account_id: ${{ vars.AWS_ACCOUNT_ID }}
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_function_name: ${{ vars.FUNCTION_NAME }}
+      TF_VAR_endpoint_name: ${{ vars.ENDPOINT_NAME }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate deployment settings and read Terraform version
+        id: terraform
+        shell: bash
+        run: |
+          for name in AWS_ACCOUNT_ID AWS_REGION TF_VAR_function_name TF_VAR_endpoint_name; do
+            test -n "${!name}" || { echo "Missing environment variable: $name" >&2; exit 1; }
+          done
+          echo "version=$(cat infra/.terraform-version)" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.terraform.outputs.version }}
+          terraform_wrapper: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+          install_options: --no-daemon
+          enable_kvm: false
+          extra_nix_config: 'sandbox = false'
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-deploy-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-deploy-
+          save: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      - name: Require production approval configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: nix develop .#ci-deploy --no-update-lock-file --command bash -euo pipefail {0}
+        run: sh infra/scripts/check-approval.sh
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-${{ github.sha }}
+          path: app/artifacts
+      - name: Generate saved plan for review
+        id: plan
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_PLAN_PASSPHRASE: ${{ secrets.TF_PLAN_PASSPHRASE }}
+          PLAN_COMMIT: ${{ github.sha }}
+          PLAN_RUN_ID: ${{ github.run_id }}
+        shell: nix develop .#ci-deploy --no-update-lock-file --command bash -euo pipefail {0}
+        run: |
+          sh infra/scripts/stage-release.sh
+          sh /tmp/typign-release/infra/scripts/deploy.sh plan
+      - id: artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: terraform-plan-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          path: /tmp/typign-release/infra/artifacts/plan/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Link the plan artifact for review
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: printf 'Review [the saved plan artifact](%s), then use Review deployments → Approve and deploy for production.\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Apply reviewed plan
+    needs: plan
+    if: github.ref == 'refs/heads/main'
+    runs-on: codebuild-typign-apply-${{ github.run_id }}-${{ github.run_attempt }}
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TF_IN_AUTOMATION: 'true'
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      PLAN_RUN_ID: ${{ github.run_id }}
+      PLAN_COMMIT: ${{ github.sha }}
+      PLAN_SHA256: ${{ needs.plan.outputs.plan_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+        with:
+          github_access_token: ${{ github.token }}
+          install_options: --no-daemon
+          enable_kvm: false
+          extra_nix_config: 'sandbox = false'
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-ci-deploy-${{ hashFiles('flake.lock', 'flake.nix', 'nix/**', 'app/.node-version') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-ci-deploy-
+          save: false
+      - name: Require production approval configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: nix develop .#ci-deploy --no-update-lock-file --command bash -euo pipefail {0}
+        run: sh infra/scripts/check-approval.sh
+      - name: Read the planned Terraform version
+        id: terraform
+        run: echo "version=$(cat infra/.terraform-version)" >> "$GITHUB_OUTPUT"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.terraform.outputs.version }}
+          terraform_wrapper: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.plan.outputs.artifact_id }}
+          merge-multiple: true
+          path: infra/artifacts/plan
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-${{ github.sha }}
+          path: app/artifacts
+      - name: Verify and apply the reviewed saved plan
+        id: deploy
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+          TF_PLAN_PASSPHRASE: ${{ secrets.TF_PLAN_PASSPHRASE }}
+        shell: nix develop .#ci-deploy --no-update-lock-file --command bash -euo pipefail {0}
+        run: |
+          sh infra/scripts/stage-release.sh
+          sh /tmp/typign-release/infra/scripts/deploy.sh apply
