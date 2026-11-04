@@ -8,6 +8,10 @@ updates:
     directory: /app
     schedule:
       interval: weekly
+    ignore:
+      # Keep Node.js types aligned with app/.node-version and the AWS runtime.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: terraform
     directories:
       - /infra
