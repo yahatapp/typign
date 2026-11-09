@@ -110,7 +110,7 @@ jobs:
         run: |
           {
             printf '[Open the plan review](%s) in your browser or download the [saved plan ZIP](%s).\n\n' "$REVIEW_URL" "$ARTIFACT_URL"
-            printf 'After reviewing the plan, use Review deployments → Approve and deploy for production within 24 hours.\n'
+            printf 'After reviewing the plan, use Review deployments → Approve and deploy for production within 7 days of plan generation.\n'
           } >> "$GITHUB_STEP_SUMMARY"
 
   apply:

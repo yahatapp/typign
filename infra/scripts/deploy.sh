@@ -50,8 +50,8 @@ if [ "$mode" = apply ]; then
       .commit == $commit and .run_id == $run and .repository == $repo and
       .plan_sha256 == $hash and .archive_sha256 == $archive and
       .terraform_version == $version and
-      (.created_at <= $now and .created_at >= ($now - 86400))
-    ' "$metadata" >/dev/null || die 'Plan metadata, ZIP, Terraform version or 24-hour validity does not match.'
+      (.created_at <= $now and .created_at >= ($now - (7 * 86400)))
+    ' "$metadata" >/dev/null || die 'Plan metadata, ZIP, Terraform version or 7-day validity does not match.'
 fi
 
 # Terraform Cloud stores/locks state; both stages execute locally on the runner.

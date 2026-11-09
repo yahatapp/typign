@@ -17,10 +17,10 @@ new_case() {
   cp "$INFRA_ROOT/.terraform-version" "$case_directory/infra/.terraform-version"
   printf 'test archive' >"$case_directory/app/artifacts/typign.zip"
   : >"$case_directory/commands"
-  for command_name in aws terraform curl unzip; do
+  for command_name in aws terraform curl date unzip; do
     ln -s "$INFRA_ROOT/tests/scripts/fixtures/command.sh" "$case_directory/bin/$command_name"
   done
-  export TEST_ACCOUNT=123456789012 TEST_FAIL='' TF_TOKEN_app_terraform_io=test-token
+  export TEST_ACCOUNT=123456789012 TEST_FAIL='' TEST_NOW=1800000000 TF_TOKEN_app_terraform_io=test-token
   export PLAN_SHA256=''
 }
 run_stage() {
@@ -51,12 +51,13 @@ no_apply() {
 printf '1..12\n'
 new_case success
 prepare_plan
+TEST_NOW=$((TEST_NOW + 7 * 86400))
 run_stage apply
-[ "$exit_status" -eq 0 ] || fail 'Apply failed.'
+[ "$exit_status" -eq 0 ] || fail 'Apply failed at the seven-day limit.'
 operations=$(awk -F '\t' '$1 == "terraform" {print $3}' "$case_directory/commands" | tr '\n' ' ')
 [ "$operations" = 'init apply output output ' ] || fail 'Apply must use the saved plan without replanning.'
 [ "$(grep -c '^curl' "$case_directory/commands")" -eq 2 ] || fail 'Missing HTTP verification.'
-printf 'ok 1 - encrypts plan and applies the identical saved plan without replanning\n'
+printf 'ok 1 - encrypts plan and applies the identical saved plan at the seven-day limit\n'
 
 new_case wrong-account
 export TEST_ACCOUNT=999999999999
@@ -92,12 +93,10 @@ no_apply
 printf 'ok 7 - rejects a different application artifact\n'
 new_case expired
 prepare_plan
-metadata="$case_directory/infra/artifacts/plan/metadata.json"
-jq '.created_at = 0' "$metadata" >"$metadata.tmp"
-mv "$metadata.tmp" "$metadata"
+TEST_NOW=$((TEST_NOW + 7 * 86400 + 1))
 run_stage apply
 no_apply
-printf 'ok 8 - rejects expired plans\n'
+printf 'ok 8 - rejects plans older than seven days\n'
 new_case tampered
 prepare_plan
 printf 'damaged ciphertext' >"$case_directory/infra/artifacts/plan/release.tfplan.gpg"

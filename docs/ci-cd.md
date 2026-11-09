@@ -35,7 +35,7 @@ CI・Plan・承認待ち・Apply を含む workflow 全体を `concurrency` で�
 3. 同じ workflow run の `Review deployments` を開き、`production` を選んで `Approve and deploy` を押す。適用を見送る場合は `Reject` を選ぶ。
 4. Apply の結果と HTTP 検査を確認する。
 
-run ID や SHA256 の入力は不要。Plan ジョブが出力した SHA256 と artifact ID を Apply ジョブへ直接渡す。Apply は復号後の plan SHA256、生成元コミット・run ID・リポジトリ、ZIP の SHA256、Terraform の版、生成から24時間以内であることを検証してから適用する。state が更新されて plan が古くなった場合は Terraform も適用を拒否する。期限切れや state 更新時は `Deploy AWS` を再実行し、新しく生成された plan のレビューと承認をやり直す。
+run ID や SHA256 の入力は不要。Plan ジョブが出力した SHA256 と artifact ID を Apply ジョブへ直接渡す。Apply は復号後の plan SHA256、生成元コミット・run ID・リポジトリ、ZIP の SHA256、Terraform の版、生成から7日以内であることを検証してから適用する。state が更新されて plan が古くなった場合は Terraform も適用を拒否する。期限切れや state 更新時は `Deploy AWS` を再実行し、新しく生成された plan のレビューと承認をやり直す。
 
 承認待ちの間は後続のデプロイも待機する。古い run を適用しない場合は、その run を Reject または Cancel してから次の run を進める。
 
