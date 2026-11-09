@@ -42,6 +42,10 @@ terraform)
   esac
   ;;
 curl) [ "$TEST_FAIL" != health ] ;;
+date)
+  [ "$*" = '+%s' ] || exit 2
+  printf '%s\n' "$TEST_NOW"
+  ;;
 unzip) : ;;
 *) exit 2 ;;
 esac

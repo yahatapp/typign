@@ -86,17 +86,32 @@ jobs:
         run: |
           sh infra/scripts/stage-release.sh
           sh /tmp/typign-release/infra/scripts/deploy.sh plan
+          cp /tmp/typign-release/infra/artifacts/plan/review.txt \
+            "/tmp/typign-release/infra/artifacts/terraform-plan-review-${GITHUB_RUN_ATTEMPT}.txt"
       - id: artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: terraform-plan-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           path: /tmp/typign-release/infra/artifacts/plan/
           if-no-files-found: error
-          retention-days: 1
-      - name: Link the plan artifact for review
+          retention-days: 7
+      - name: Upload the plan review for browser preview
+        id: review
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: /tmp/typign-release/infra/artifacts/terraform-plan-review-${{ github.run_attempt }}.txt
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+      - name: Link the plan review and saved plan
         env:
+          REVIEW_URL: ${{ steps.review.outputs.artifact-url }}
           ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
-        run: printf 'Review [the saved plan artifact](%s), then use Review deployments → Approve and deploy for production.\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          {
+            printf '[Open the plan review](%s) in your browser or download the [saved plan ZIP](%s).\n\n' "$REVIEW_URL" "$ARTIFACT_URL"
+            printf 'After reviewing the plan, use Review deployments → Approve and deploy for production within 7 days of plan generation.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   apply:
     name: Apply reviewed plan

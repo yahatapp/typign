@@ -26,16 +26,16 @@
 
 `Deploy AWS`（`.github/workflows/deploy.yml`）の中で、Plan と Apply を別ジョブに分けている。CI は GitHub-hosted runner、Plan は CodeBuild の `typign-plan`、Apply は `typign-apply` で実行する。Plan の成功後、Apply は `production` Environment の承認を待つ。承認後に同じコミットを checkout し、その run の ZIP と保存済み plan を取得する。再ビルドや plan の再生成は行わない。適用後は `/health` とトップページへの HTTP アクセスを確認する。
 
-CI・Plan・承認待ち・Apply を含む workflow 全体を `concurrency` で直列化し、実行中の apply を後続 push でキャンセルしない。GitHub の concurrency は実行順を保証せず、待機中の古い run が新しい run に置き換わる場合がある。state の保存とロックは Terraform Cloud が管理する。state はアップロードしない。Web の成果物と失敗時の E2E 結果は7日間、暗号化した plan とレビュー用テキストは1日間保持する。
+CI・Plan・承認待ち・Apply を含む workflow 全体を `concurrency` で直列化し、実行中の apply を後続 push でキャンセルしない。GitHub の concurrency は実行順を保証せず、待機中の古い run が新しい run に置き換わる場合がある。state の保存とロックは Terraform Cloud が管理する。state はアップロードしない。Web の成果物、失敗時の E2E 結果、保存済み plan の ZIP、レビュー用テキストは7日間保持する。
 
 ### plan をレビューして適用する
 
 1. Actions の `Deploy AWS` で `Plan production` が成功したら、対象コミットを確認する。
-2. Plan ジョブの Summary にあるリンクから artifact をダウンロードし、`review.txt` で追加・変更・削除をレビューする。artifact 名は `terraform-plan-<run ID>-<run attempt>-<commit SHA>`。
+2. 実行サマリーの `Open the plan review` を開き、ブラウザで追加・変更・削除を確認する。レビュー用 artifact 名は `terraform-plan-review-<run attempt>.txt`。同じサマリーから保存済み plan の ZIP（`terraform-plan-<run ID>-<run attempt>-<commit SHA>`）も取得できる。
 3. 同じ workflow run の `Review deployments` を開き、`production` を選んで `Approve and deploy` を押す。適用を見送る場合は `Reject` を選ぶ。
 4. Apply の結果と HTTP 検査を確認する。
 
-run ID や SHA256 の入力は不要。Plan ジョブが出力した SHA256 と artifact ID を Apply ジョブへ直接渡す。Apply は復号後の plan SHA256、生成元コミット・run ID・リポジトリ、ZIP の SHA256、Terraform の版、生成から24時間以内であることを検証してから適用する。state が更新されて plan が古くなった場合は Terraform も適用を拒否する。期限切れや state 更新時は `Deploy AWS` を再実行し、新しく生成された plan のレビューと承認をやり直す。
+run ID や SHA256 の入力は不要。Plan ジョブが出力した SHA256 と artifact ID を Apply ジョブへ直接渡す。Apply は復号後の plan SHA256、生成元コミット・run ID・リポジトリ、ZIP の SHA256、Terraform の版、生成から7日以内であることを検証してから適用する。state が更新されて plan が古くなった場合は Terraform も適用を拒否する。期限切れや state 更新時は `Deploy AWS` を再実行し、新しく生成された plan のレビューと承認をやり直す。
 
 承認待ちの間は後続のデプロイも待機する。古い run を適用しない場合は、その run を Reject または Cancel してから次の run を進める。
 

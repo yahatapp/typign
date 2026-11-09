@@ -50,8 +50,8 @@ if [ "$mode" = apply ]; then
       .commit == $commit and .run_id == $run and .repository == $repo and
       .plan_sha256 == $hash and .archive_sha256 == $archive and
       .terraform_version == $version and
-      (.created_at <= $now and .created_at >= ($now - 86400))
-    ' "$metadata" >/dev/null || die 'Plan metadata, ZIP, Terraform version or 24-hour validity does not match.'
+      (.created_at <= $now and .created_at >= ($now - (7 * 86400)))
+    ' "$metadata" >/dev/null || die 'Plan metadata, ZIP, Terraform version or 7-day validity does not match.'
 fi
 
 # Terraform Cloud stores/locks state; both stages execute locally on the runner.
@@ -72,7 +72,7 @@ if [ "$mode" = plan ]; then
   printf '\nCommit: %s\nPlan run ID: %s\nPlan SHA256: %s\n' "$PLAN_COMMIT" "$PLAN_RUN_ID" "$plan_hash" >>"$artifact_directory/review.txt"
   cat "$artifact_directory/review.txt"
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-    printf 'Plan ready for review. Download the terraform-plan artifact and read review.txt.\n\nCommit: %s\n\nPlan run ID: %s\n\nPlan SHA256: %s\n\nAfter reviewing review.txt, use Review deployments and Approve and deploy for production within 24 hours.\n' \
+    printf 'Plan ready for review.\n\nCommit: %s\nPlan run ID: %s\nPlan SHA256: %s\n' \
       "$PLAN_COMMIT" "$PLAN_RUN_ID" "$plan_hash" >>"$GITHUB_STEP_SUMMARY"
   fi
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
