@@ -72,7 +72,7 @@ if [ "$mode" = plan ]; then
   printf '\nCommit: %s\nPlan run ID: %s\nPlan SHA256: %s\n' "$PLAN_COMMIT" "$PLAN_RUN_ID" "$plan_hash" >>"$artifact_directory/review.txt"
   cat "$artifact_directory/review.txt"
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-    printf 'Plan ready for review. Download the terraform-plan artifact and read review.txt.\n\nCommit: %s\n\nPlan run ID: %s\n\nPlan SHA256: %s\n\nAfter reviewing review.txt, use Review deployments and Approve and deploy for production within 24 hours.\n' \
+    printf 'Plan ready for review.\n\nCommit: %s\nPlan run ID: %s\nPlan SHA256: %s\n' \
       "$PLAN_COMMIT" "$PLAN_RUN_ID" "$plan_hash" >>"$GITHUB_STEP_SUMMARY"
   fi
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
