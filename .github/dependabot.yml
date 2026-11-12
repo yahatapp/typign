@@ -1,13 +1,19 @@
 version: 2
+
+multi-ecosystem-groups:
+  dependencies:
+    schedule:
+      interval: weekly
+
 updates:
   - package-ecosystem: github-actions
     directory: /
-    schedule:
-      interval: weekly
+    patterns: ['*']
+    multi-ecosystem-group: dependencies
   - package-ecosystem: npm
     directory: /app
-    schedule:
-      interval: weekly
+    patterns: ['*']
+    multi-ecosystem-group: dependencies
     ignore:
       # Keep Node.js types aligned with app/.node-version and the AWS runtime.
       - dependency-name: '@types/node'
@@ -16,5 +22,5 @@ updates:
     directories:
       - /infra
       - /infra/bootstrap
-    schedule:
-      interval: weekly
+    patterns: ['*']
+    multi-ecosystem-group: dependencies

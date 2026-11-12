@@ -243,7 +243,7 @@ git diff -- .github/workflows
 
 `--no-narrow` は SHA をタグへ書き戻さずに lockfile を生成するために必要。lockfile 内の SHA とタグの両エントリーは公式ツールが生成する。手で編集しない。`nix/actions-lock.nix` はこの動作を確認した v0.4.0 の公式バイナリをハッシュ付きで固定している。
 
-Dependabot は Actions・npm・Terraform Provider の更新を週1回確認する。SHA 固定と lockfile の両方を更新できていることを PR で確認する。nixpkgs は `nix flake update nixpkgs` で更新する。Node.js の更新時は固定する nixpkgs と `app/.node-version` を、pnpm の更新時は `packageManager` と flake の版・ハッシュを合わせる。
+Dependabot は Actions・npm・Terraform Provider のバージョン更新を週1回確認し、更新があれば1件の PR にまとめる。セキュリティ更新は別の PR で届く。Actions の更新時は、SHA と lockfile が両方更新されていることを PR で確認する。nixpkgs は `nix flake update nixpkgs` で更新する。Node.js の更新時は固定する nixpkgs と `app/.node-version` を、pnpm の更新時は `packageManager` と flake の版・ハッシュを合わせる。
 
 Provider の更新時は、ローカルと CI で使う OS・CPU のチェックサムを公式レジストリから追加する。CI の `init -lockfile=readonly` は維持し、lockfile の検証を省略しない。
 
