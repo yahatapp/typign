@@ -12,11 +12,11 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "6.72.0"
+      version = "6.73.0"
     }
     awscc = {
       source  = "hashicorp/awscc"
-      version = "1.109.0"
+      version = "1.110.0"
     }
   }
 }
