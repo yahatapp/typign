@@ -8,9 +8,8 @@ variable "aws_account_id" {
 }
 
 variable "aws_region" {
-  description = "Region of the deployment resources."
+  description = "Selected AWS project Region; must match the application and both GitHub deployment Environments."
   type        = string
-  default     = "ap-northeast-1"
 }
 
 variable "github_repository" {

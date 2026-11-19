@@ -15,6 +15,7 @@ override_resource {
 
 variables {
   aws_account_id           = "123456789012"
+  aws_region               = "ap-northeast-1"
   allowed_github_actor_ids = ["12345678"]
 }
 

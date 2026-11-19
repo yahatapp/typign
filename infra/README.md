@@ -27,7 +27,7 @@ AWSの認証は、`aws login`で取得した一時認証情報を両Providerで�
 
 実行するIAM主体には、Cloud Control APIの操作に加え、Web Functionの作成・取得・更新・削除、実行ロールの管理と`iam:PassRole`、S3とログの管理権限が必要になる。AWSCCはCloud Control経由で操作するため、通常のLambda操作権限だけでは足りない。
 
-既定のリージョンは東京。利用するアカウントとリージョンで、Web FunctionsとCloud Controlの対象リソースを作成できることを確認する。AWSへの実適用、東京リージョンでの起動、料金は未確認。
+`aws_region`は必須。AWSプロジェクトの選択リージョンを指定し、アプリ・bootstrap・GitHubの両Environmentで揃える。現在の環境はSydney（`ap-southeast-2`）。無料プロジェクトでは選択したリージョン以外への操作がSCPで拒否されるため、[CI/CDのリージョン設定](../docs/ci-cd.md#無料プロジェクトのリージョンを揃える)を先に確認する。
 
 ## 初回の配置
 
@@ -41,7 +41,7 @@ pnpm --dir app package:aws
 cp infra/terraform.tfvars.example infra/terraform.tfvars
 ```
 
-`terraform.tfvars`の`aws_account_id`を実際の12桁のアカウントIDへ変更する。名前やリージョンもここで指定できる。AWS ProviderはアカウントIDを照合する。
+`terraform.tfvars`の`aws_account_id`を実際の12桁のアカウントIDへ、`aws_region`をAWSプロジェクトの選択リージョンへ変更する。名前もここで指定できる。AWS ProviderはアカウントIDを照合する。
 
 `pnpm --dir app package:aws`は本番ビルド後、一時フォルダへ必要な成果物だけをコピーし、lockfileに従って本番依存関係を入れる。依存関係をZIP内に収めるため、一時フォルダでは通常のディレクトリ配置を使う。生成先は`app/artifacts/typign.zip`。ソース、個人データ、認証情報を追加で収集する処理はない。
 
