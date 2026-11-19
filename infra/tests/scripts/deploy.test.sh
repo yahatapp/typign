@@ -22,12 +22,16 @@ new_case() {
   done
   export TEST_ACCOUNT=123456789012 TEST_FAIL='' TEST_NOW=1800000000 TF_TOKEN_app_terraform_io=test-token
   export PLAN_SHA256=''
+  export TEST_REGION=ap-southeast-2 TF_VAR_aws_region=''
+  export CODEBUILD_BUILD_ARN=arn:aws:codebuild:ap-southeast-2:123456789012:build/typign-plan:test
 }
 run_stage() {
   exit_status=0
   (
     export PATH="$case_directory/bin:$PATH"
-    export AWS_ACCOUNT_ID=123456789012 AWS_REGION=ap-northeast-1 TF_PLAN_PASSPHRASE=test-only-passphrase
+    export AWS_ACCOUNT_ID=123456789012 AWS_REGION="$TEST_REGION" TF_PLAN_PASSPHRASE=test-only-passphrase
+    # An unset Terraform Region must be supplied by the deployment script.
+    if [ -z "$TF_VAR_aws_region" ]; then unset TF_VAR_aws_region; fi
     export GITHUB_REPOSITORY=yahatapp/typign PLAN_COMMIT=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa PLAN_RUN_ID=123
     export TEST_LOG="$case_directory/commands" GITHUB_OUTPUT="$case_directory/output" GITHUB_STEP_SUMMARY="$case_directory/summary"
     sh "$case_directory/infra/scripts/deploy.sh" "$1"
@@ -48,7 +52,7 @@ no_apply() {
   [ "$exit_status" -ne 0 ] || fail 'Expected rejection.'
   if grep -Eq '[[:space:]]apply([[:space:]]|$)' "$case_directory/commands"; then fail 'Rejected plan reached apply.'; fi
 }
-printf '1..12\n'
+printf '1..18\n'
 new_case success
 prepare_plan
 TEST_NOW=$((TEST_NOW + 7 * 86400))
@@ -122,3 +126,51 @@ run_stage ''
 no_apply
 [ ! -s "$case_directory/commands" ] || fail 'Missing mode reached commands.'
 printf 'ok 12 - requires an explicit plan or apply mode\n'
+
+new_case wrong-runner-region
+export TEST_REGION=ap-northeast-1
+run_stage plan
+no_apply
+[ ! -s "$case_directory/commands" ] || fail 'Region mismatch reached AWS or Terraform.'
+grep -Fq 'must match the CodeBuild project Region (ap-southeast-2)' "$case_directory/stderr" || fail 'Missing actionable Region mismatch error.'
+printf 'ok 13 - rejects deployment outside the CodeBuild project Region before AWS calls\n'
+
+new_case conflicting-terraform-region
+export TF_VAR_aws_region=ap-northeast-1
+run_stage plan
+no_apply
+[ ! -s "$case_directory/commands" ] || fail 'Conflicting Terraform Region reached commands.'
+printf 'ok 14 - rejects conflicting Terraform and AWS Regions\n'
+
+new_case changed-apply-region
+prepare_plan
+export TEST_REGION=ap-northeast-1
+export CODEBUILD_BUILD_ARN=arn:aws:codebuild:ap-northeast-1:123456789012:build/typign-apply:test
+run_stage apply
+no_apply
+if grep -q '^terraform' "$case_directory/commands"; then fail 'Changed Region reached Terraform.'; fi
+printf 'ok 15 - rejects a different Apply Region from the reviewed plan\n'
+
+new_case wrong-apply-runner-region
+prepare_plan
+export CODEBUILD_BUILD_ARN=arn:aws:codebuild:ap-northeast-1:123456789012:build/typign-apply:test
+run_stage apply
+no_apply
+[ ! -s "$case_directory/commands" ] || fail 'Apply runner Region mismatch reached commands.'
+printf 'ok 16 - checks the Apply runner Region before AWS calls\n'
+
+new_case wrong-metadata-account
+prepare_plan
+metadata="$case_directory/infra/artifacts/plan/metadata.json"
+jq '.aws_account_id = "999999999999"' "$metadata" >"$metadata.tmp"
+mv "$metadata.tmp" "$metadata"
+run_stage apply
+no_apply
+printf 'ok 17 - rejects plan metadata for a different AWS account\n'
+
+new_case local-deployment
+unset CODEBUILD_BUILD_ARN
+prepare_plan
+run_stage apply
+[ "$exit_status" -eq 0 ] || fail 'Local deployment without CodeBuild failed.'
+printf 'ok 18 - permits explicit local deployment without CodeBuild variables\n'

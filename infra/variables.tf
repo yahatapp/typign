@@ -10,9 +10,8 @@ variable "aws_account_id" {
 }
 
 variable "aws_region" {
-  description = "AWS Region that supports Lambda Web Functions and their Cloud Control resource handlers."
+  description = "Selected AWS project Region; must match bootstrap and both GitHub deployment Environments."
   type        = string
-  default     = "ap-northeast-1"
   nullable    = false
 }
 

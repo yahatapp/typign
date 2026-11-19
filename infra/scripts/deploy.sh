@@ -15,6 +15,14 @@ case "$mode" in plan | apply) ;; *) exit 2 ;; esac
 : "${GITHUB_REPOSITORY:?Missing GITHUB_REPOSITORY}"
 : "${PLAN_COMMIT:?Missing PLAN_COMMIT}"
 : "${PLAN_RUN_ID:?Missing PLAN_RUN_ID}"
+# Project accounts restrict regional services to the selected project Region.
+# Use the build ARN because workflow env can override CodeBuild's AWS_REGION.
+if [ -n "${CODEBUILD_BUILD_ARN:-}" ]; then
+  runner_region=$(printf '%s\n' "$CODEBUILD_BUILD_ARN" | cut -d : -f 4)
+  [ "$AWS_REGION" = "$runner_region" ] || die "AWS_REGION ($AWS_REGION) must match the CodeBuild project Region ($runner_region). Check both GitHub Environments and the AWS project's selected Region."
+fi
+[ "${TF_VAR_aws_region:-$AWS_REGION}" = "$AWS_REGION" ] || die 'TF_VAR_aws_region must match AWS_REGION.'
+export AWS_DEFAULT_REGION="$AWS_REGION" TF_VAR_aws_region="$AWS_REGION"
 INFRA_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$INFRA_ROOT"
 artifact_directory="$INFRA_ROOT/artifacts/plan"
@@ -46,12 +54,14 @@ if [ "$mode" = apply ]; then
   jq -e --arg commit "$PLAN_COMMIT" --arg run "$PLAN_RUN_ID" \
     --arg repo "$GITHUB_REPOSITORY" --arg hash "$PLAN_SHA256" \
     --arg archive "$(hash_file "$archive")" --arg version "$(cat .terraform-version)" \
+    --arg account "$AWS_ACCOUNT_ID" --arg region "$AWS_REGION" \
     --argjson now "$(date +%s)" '
       .commit == $commit and .run_id == $run and .repository == $repo and
       .plan_sha256 == $hash and .archive_sha256 == $archive and
       .terraform_version == $version and
+      .aws_account_id == $account and .aws_region == $region and
       (.created_at <= $now and .created_at >= ($now - (7 * 86400)))
-    ' "$metadata" >/dev/null || die 'Plan metadata, ZIP, Terraform version or 7-day validity does not match.'
+    ' "$metadata" >/dev/null || die 'Plan metadata, AWS account/Region, ZIP, Terraform version or 7-day validity does not match.'
 fi
 
 # Terraform Cloud stores/locks state; both stages execute locally on the runner.
@@ -64,8 +74,9 @@ if [ "$mode" = plan ]; then
   jq -n --arg commit "$PLAN_COMMIT" --arg run "$PLAN_RUN_ID" \
     --arg repo "$GITHUB_REPOSITORY" --arg hash "$plan_hash" \
     --arg archive "$(hash_file "$archive")" --arg version "$(cat .terraform-version)" \
+    --arg account "$AWS_ACCOUNT_ID" --arg region "$AWS_REGION" \
     --argjson now "$(date +%s)" \
-    '{commit:$commit,run_id:$run,repository:$repo,plan_sha256:$hash,archive_sha256:$archive,terraform_version:$version,created_at:$now}' >"$metadata"
+    '{commit:$commit,run_id:$run,repository:$repo,plan_sha256:$hash,archive_sha256:$archive,terraform_version:$version,aws_account_id:$account,aws_region:$region,created_at:$now}' >"$metadata"
   printf '%s' "$TF_PLAN_PASSPHRASE" | gpg --batch --quiet --pinentry-mode loopback \
     --passphrase-fd 0 --symmetric --cipher-algo AES256 \
     --output "$artifact_directory/release.tfplan.gpg" "$plan"

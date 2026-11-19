@@ -23,6 +23,8 @@ terraform)
   case "$operation" in
   init) [ "$TEST_FAIL" != init ] ;;
   plan)
+    [ "${TF_VAR_aws_region:?Missing Terraform Region}" = "$AWS_REGION" ]
+    [ "$AWS_DEFAULT_REGION" = "$AWS_REGION" ]
     printf 'saved plan' >"$plan_path"
     [ "$TEST_FAIL" != plan ]
     ;;

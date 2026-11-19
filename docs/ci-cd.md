@@ -35,7 +35,7 @@ CI・Plan・承認待ち・Apply を含む workflow 全体を `concurrency` で�
 3. 同じ workflow run の `Review deployments` を開き、`production` を選んで `Approve and deploy` を押す。適用を見送る場合は `Reject` を選ぶ。
 4. Apply の結果と HTTP 検査を確認する。
 
-run ID や SHA256 の入力は不要。Plan ジョブが出力した SHA256 と artifact ID を Apply ジョブへ直接渡す。Apply は復号後の plan SHA256、生成元コミット・run ID・リポジトリ、ZIP の SHA256、Terraform の版、生成から7日以内であることを検証してから適用する。state が更新されて plan が古くなった場合は Terraform も適用を拒否する。期限切れや state 更新時は `Deploy AWS` を再実行し、新しく生成された plan のレビューと承認をやり直す。
+run ID や SHA256 の入力は不要。Plan ジョブが出力した SHA256 と artifact ID を Apply ジョブへ直接渡す。Apply は復号後の plan SHA256、生成元コミット・run ID・リポジトリ、AWS アカウント・リージョン、ZIP の SHA256、Terraform の版、生成から7日以内であることを検証してから適用する。state が更新されて plan が古くなった場合は Terraform も適用を拒否する。期限切れや state 更新時は `Deploy AWS` を再実行し、新しく生成された plan のレビューと承認をやり直す。
 
 承認待ちの間は後続のデプロイも待機する。古い run を適用しない場合は、その run を Reject または Cancel してから次の run を進める。
 
@@ -128,6 +128,13 @@ CD 用には `typign` の state の読み書きとロックを許可した API �
 
 ## AWS の初期設定
 
+### 無料プロジェクトのリージョンを揃える
+
+- AWS Settings でプロジェクトの選択リージョンを確認し、アプリ・bootstrap の `aws_region` と、両 GitHub Environment の `AWS_REGION` を同じ値にする。現在の環境は Sydney（`ap-southeast-2`）。Terraform にリージョンの既定値は設けていない。
+- 無料プロジェクトで利用できる CodeBuild、Cloud Control API、Lambda、S3、CloudWatch Logs、IAM を使う。Identity Center、IAM OIDC Provider、複数リージョンへの配置は構成に含めない。[利用できるサービス](https://docs.aws.amazon.com/accounts/latest/reference/supported-services-sign-up-new.html)と[プロジェクトの管理ポリシー](https://docs.aws.amazon.com/accounts/latest/reference/scps-and-rcps-for-projects.html)を参照する。
+- `cloudformation:GetResource` が `explicit deny in a service control policy` で失敗したら、まず選択リージョンと CD の設定を照合する。2026-11-05 の障害では、Sydney の既存リソースを Tokyo（`ap-northeast-1`）から取得しようとして拒否された。IAM の Allow を追加しても SCP の Deny は解除できない。
+- `deploy.sh` は CodeBuild のビルド ARN と配置先のリージョンを照合し、不一致なら AWS API や Terraform を呼ぶ前に停止する。`TF_VAR_aws_region` の不一致も拒否し、AWS CLI と Terraform に同じリージョンを渡す。Apply では保存した plan のアカウント・リージョンも照合する。
+
 ### Identity Center を使わずにローカルで認証する
 
 初期設定を行う IAM ユーザーまたは既存のフェデレーションロールで、AWS コンソールへサインインできることを確認する。AWS CLI 2.32.0 以降の `aws login` はコンソールの認証から一時認証情報を取得できる。利用主体には `SignInLocalDevelopmentAccess` と初期設定するリソースの管理権限が必要。[AWS の公式手順](https://docs.aws.amazon.com/signin/latest/userguide/command-line-sign-in.html)を参照する。
@@ -136,8 +143,8 @@ Terraform の Provider・backend からも使えるよう、AWS CLI を呼ぶ認
 
 ```sh
 nix develop .#ci-deploy
-aws login --profile typign-console --region ap-northeast-1
-aws configure set region ap-northeast-1 --profile typign
+aws login --profile typign-console --region ap-southeast-2
+aws configure set region ap-southeast-2 --profile typign
 aws configure set credential_process \
   'aws configure export-credentials --profile typign-console --format process' \
   --profile typign
@@ -213,7 +220,7 @@ terraform -chdir=infra state list
 | Variable | 値 |
 | --- | --- |
 | `AWS_ACCOUNT_ID` | 配置先の12桁の ID |
-| `AWS_REGION` | `ap-northeast-1` など |
+| `AWS_REGION` | AWS プロジェクトの選択リージョン。現在は `ap-southeast-2`。アプリ・bootstrap・両 Environment で揃える |
 | `FUNCTION_NAME` | bootstrap とアプリの `function_name`。既定は `typign-dev` |
 | `ENDPOINT_NAME` | 既存環境なら現在の値。既定は `dev` |
 
@@ -260,6 +267,7 @@ terraform -chdir=infra/bootstrap providers lock \
 - Trivy は high・critical で失敗する。配布用 S3 の SSE-S3 を設定する1か所だけ、顧客管理 KMS キーを求める `AVD-AWS-0132` を理由付きコメントで除外している。他のルールは除外していない。
 - Gitleaks は履歴を検査する。GitHub 側の Secret scanning / Push protection が利用できる場合は併用できる。検出済みの秘密は削除だけで済ませず、失効・再発行する。
 - ローカルの macOS ARM64 で Web 単体64件、E2E 13件、デプロイスクリプト12件・承認設定の検証6件、Terraform モック11件が成功した。配布パッケージ起動、型検査・ビルド・lint・format、各種静的検査も確認した。GitHub の Linux runner、Terraform Cloud への接続・移行、CodeBuild ランナーの起動、AWS への apply は未実行。
+- 2026-11-05 の CD 障害対応では、両 Environment の `AWS_REGION` を `ap-southeast-2` に修正し、[main の Plan 再実行](https://github.com/yahatapp/typign/actions/runs/41927248717)が成功した。再実行直後の Apply は本番承認待ちだった。そのときの plan には、ZIP とリビジョンの更新に加え、`rate_limit` の `0 → 100` と `Environment=dev` タグの削除が含まれていた。再発防止のローカル検証では、デプロイスクリプト18件・承認設定6件・Terraform モック11件と、ShellCheck・shfmt・Terraform fmt/validate・TFLint・actionlint が通った。
 
 ## 失敗したとき
 
@@ -275,6 +283,8 @@ terraform -chdir=infra/bootstrap providers lock \
 | Remote 実行になっている | Workspace の Execution Mode を `Local` にする。AWS 認証と ZIP は Actions 上で使用する |
 | Terraform の state lock | 実行中の CI・ローカル apply と Workspace のロックを確認。所有者を確認するまで force-unlock しない |
 | AWSCC の AccessDenied | Cloud Control と Lambda の双方の IAM 権限を確認。実環境で不足したアクションは対象リソースへ絞って追加 |
+| `cloudformation:GetResource` が SCP の explicit deny で失敗 | AWS プロジェクトの選択リージョン、既存リソースの ARN、両 Environment の `AWS_REGION` を照合。現在は `ap-southeast-2` に統一する |
+| `AWS_REGION ... must match the CodeBuild project Region` | アプリ・bootstrap・両 Environment のリージョンを揃えて Plan から再実行する。別リージョンへの配置は行わない |
 | lockfile 検証失敗 | Action の更新元を確認して `gh-actions-lock --no-narrow` で再生成 |
 | apply 後の health 失敗 | CloudWatch Logs と Terraform のリビジョンを確認。workflow は失敗として記録されるが、自動で前の版には戻さない |
 
@@ -289,4 +299,4 @@ terraform -chdir=infra/bootstrap providers lock \
 
 解決しない場合は、失敗したジョブ名・エラー・コミット SHA をリポジトリの Issue またはこのチャットで共有する。トークン、state、認証情報を含む plan は共有しない。
 
-最終更新日: 2026-11-03
+最終更新日: 2026-11-05
